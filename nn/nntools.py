@@ -9,8 +9,7 @@ class SupervisedLearningModel():
 
     def __init__(self,
                  model_name='',
-                 nn_module=None,
-                 hyperHyperParameters=None):
+                 nn_module=None):
         """
         Class that provides utilities used for training NN model
 
@@ -28,6 +27,19 @@ class SupervisedLearningModel():
         """
         self.model_name = model_name
         self.nn_module = nn_module
-        self.hhParameters = hyperHyperParameters
+
+        def train_ensemble(self,
+                           nensemble = 10,
+                           torch_loss = nn.MSELoss,
+                           torch_optimizer = optim.Adam,
+                           stop = 'nepochs',
+                           weight_decay = 0.0,
+                           learn_rate = 1e-4,
+                           nepochs = 100,
+                           tol = 1e-1): raise NotImplementedError
+
+        def compute_loss_batch(self): raise NotImplementedError
+
+        def predict_dataset(self): raise NotImplementedError
 
     
