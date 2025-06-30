@@ -12,19 +12,22 @@ import torch.nn.functional as F
 class testCNN(nn.Module):
     """
     test NN on logistic input with only one conv layer/activation
+    and one fully connected layer
 
     input (1 x 256), output (1 x 2)
     """
-    def init(self):
+    def __init__(self):
         super().__init__()
         f = 128
         self.convLayer = nn.Conv1d(1, 1, 2*f-1, f, f-1)
-        self.relu = nn.ReLU
+        self.relu = nn.ReLU()
+        self.linear = nn.Linear(2,2)
 
     def forward(self, x):
 
         x = self.convLayer(x)
         x = self.relu(x)
+        x = self.linear(x)
 
         return x
 
@@ -57,3 +60,14 @@ class logisticGrowthCNN(nn.Module):
         #TODO
     
     def forward(self, x): raise NotImplementedError
+
+#test
+if __name__=='__main__':
+    model = testCNN().to()
+    #print(model)
+
+    X = torch.rand(1,256)
+    Y = model(X)
+    print(Y)
+    for name, param in model.named_parameters():
+        print(f"Layer: {name} | Size: {param.size()} | Values : {param[:2]} \n")
