@@ -16,9 +16,9 @@ import torch.nn.functional as F
 
 if __name__=='__main__':
     
-    U = logistic_data.genU_logistic_noise(128, 0.1)
+    U = logistic_data.genU_logistic_noise(256, 0.01)
 
-    logistic_testCNN = nntools.SupervisedLearningModel(
+    logistic_testCNN = nntools.ODESupervisedLearningModel(
         model_name = 'logistic_testCNN',
         nn_module = nnmodels.testCNN,
         dataset = U,
@@ -26,10 +26,12 @@ if __name__=='__main__':
         gen_ODE = logistic_data.genU_logistic
     )
 
-    logistic_testCNN.train_ensemble(
+    models = logistic_testCNN.train_ensemble(
         nensemble = 2,
         nepochs = 5
     )
+
+    print(models[1])
 
 
 

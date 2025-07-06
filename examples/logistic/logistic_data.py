@@ -2,10 +2,13 @@
 logistic equation
 """
 import numpy as np
+import torch
 from scipy.integrate import solve_ivp
+from torchdiffeq import odeint #https://github.com/rtqichen/torchdiffeq?tab=readme-ov-file
 import matplotlib.pyplot as plt
 
-def f(p,u,t): return p[0]*u - p[1]*u**2
+def f(p,u,t): 
+    return p[0]*u - p[1]*u**2
 
 def solve_logistic(p, T, u0):
 
@@ -31,13 +34,32 @@ def genU_logistic_noise(M, nRat):
 
     return Ustar + E
 
-def genU_logistic(p, Tsubset):
+def solve_logistic_torch(p, T, u0):
+    """
+    Assumes p,T are PyTorch tensors. Necessary to
+    preserve the gradient while computing loss
+
+    Uses a torch-based solver which avoids numpy
+    operations (which kill the gradient)
+    """
+    def fhat(t,u): return f(p,u,t)
+
+    u = odeint(fhat, T, torch.tensor(u0))
+    return u.flatten()
+
+
+def genU_logistic(p, T, mask):
     """
     For setting up loss in the NN.
 
-    p : parameters [p1, p2]
+    p : parameters [p1, p2] as torch tensor
+    T : full time span as torch tensor
     Tsubset : subset of t after masking for
         train/validation datasets
     """
-    u = solve_logistic(p,10,0.01)
-    return np.array([u(ti) for ti in Tsubset])
+    u = solve_logistic_torch(p,T,[0.01])
+
+    mask = torch.tensor(mask, dtype=bool)
+    u = u[mask]
+    
+    return u
