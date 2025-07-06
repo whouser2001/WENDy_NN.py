@@ -13,20 +13,24 @@ class testCNN(nn.Module):
     """
     test NN on logistic input with only one conv layer/activation
     and one fully connected layer
-
-    input (1 x 256), output (1 x 2)
     """
     def __init__(self):
         super().__init__()
-        f = 128
-        self.convLayer = nn.Conv1d(1, 1, 2*f-1, f, f-1)
+        self.convLayer = nn.Conv1d(
+            in_channels=1, 
+            out_channels=16, 
+            kernel_size=3, 
+            padding=1)
         self.relu = nn.ReLU()
-        self.linear = nn.Linear(2,2)
+        self.pool = nn.AdaptiveAvgPool1d(1)
+        self.linear = nn.Linear(16,2)
+        self.double()
 
     def forward(self, x):
 
-        x = self.convLayer(x)
-        x = self.relu(x)
+        x = self.relu(self.convLayer(x))
+        x = self.pool(x)
+        x = x.flatten()
         x = self.linear(x)
 
         return x

@@ -42,7 +42,7 @@ class ODESupervisedLearningModel():
         self.T = T
 
         self.info_dict = {}
-        self.info_dict['model name'] = self.model_name
+        self.info_dict['model_name'] = self.model_name
         self.info_dict['batch_size'] = batch_size
         self.info_dict['train_device'] = train_device
         self.info_dict['test_device'] = test_device
@@ -56,7 +56,7 @@ class ODESupervisedLearningModel():
                         torch_optimizer = optim.Adam,
                         stop = 'nepochs',
                         weight_decay = 0.0,
-                        learn_rate = 1e-4,
+                        learn_rate = 5e-3,
                         nepochs = 100,
                         tol = 1e-1): 
             
@@ -83,6 +83,8 @@ class ODESupervisedLearningModel():
             self.stop_epoch = np.zeros(nensemble, dtype=int) - 1
             self.stop = stop
             self.tol = tol
+
+            models = []
 
             # begin training
             for model_index in range(nensemble):
@@ -111,19 +113,32 @@ class ODESupervisedLearningModel():
                                                   replace=False)
                 mask = np.zeros(n_elements, dtype=bool)
                 mask[masked_indices] = True
-                mask = mask.reshape(info_dict['shape'])
+                #print(mask.size)
+                maskU = mask.reshape(info_dict['shape'])
 
-                U_train = U.copy().astype(float)[mask]
+                U_train = U.copy().astype(float)[maskU]
                 U_val = U.copy().astype(float)[
-                    np.logical_not(mask)
+                    np.logical_not(maskU)
                 ]
+
+                U_train = np.expand_dims(U_train, axis=0)
+                U_val = np.expand_dims(U_val, axis=0)
+
+                U_train = torch.tensor(U_train, dtype=torch.float64,
+                                       requires_grad=True)
+                U_val = torch.tensor(U_val, dtype=torch.float64,
+                                     requires_grad=True)
 
                 #Corresponding times of train/val subsets
                 t = np.linspace(0,self.T,n_elements)
-                t_train = t.copy().astype(float)[mask]
-                t_val = t.copy().astype(float)[
-                    np.logical_not(mask)
-                ]
+                #t_train = t.copy().astype(float)[mask]
+                #t_val = t.copy().astype(float)[
+                #    np.logical_not(mask)
+                #]
+
+                t = torch.tensor(t, dtype=torch.float64)
+                #t_train = torch.tensor(t_train)
+                #t_val = torch.tensor(t_val)
 
                 epoch = 1
                 while epoch < nepochs + 1:
@@ -139,11 +154,21 @@ class ODESupervisedLearningModel():
 
                     optimizer.zero_grad()
                     loss = compute_loss(
-                        U_train, t_train, nn_model, 
+                        U_train, t, mask, nn_model, 
                         loss_func, device=device)
 
                     #backpropogation
                     loss.backward()
+                    """
+                    total_norm = 0.0
+                    for p in nn_model.parameters():
+                        if p.grad is not None:
+                            param_norm = p.grad.detach().data.norm(2)
+                            total_norm += param_norm.item() ** 2
+                    total_norm = total_norm ** 0.5
+                    print(f"Gradient norm: {total_norm:.4e}")
+                    """
+
                     optimizer.step()
 
                     train_loss = loss.item()
@@ -154,8 +179,9 @@ class ODESupervisedLearningModel():
                     #switch model to validation mode
                     nn_model.eval()
 
+                    mask_not = np.logical_not(mask)
                     loss = compute_loss(
-                        U_val, t_val, nn_model,
+                        U_val, t, mask_not, nn_model,
                         loss_func, device=device
                     )
 
@@ -165,8 +191,8 @@ class ODESupervisedLearningModel():
                     #display status
                     msg = "\nmodel {:2d}/{:2d}, e= {:3d}, tl= {:1.2e}, vl= {:1.2e}"\
                     .format(model_index, nensemble-1,
-                            epoch, train_loss)
-                    self._print(msg)
+                            epoch, train_loss, valid_loss)
+                    print(msg)
 
                     #apply stopping criteria
                     #TODO: implement _save_nn_model?
@@ -174,27 +200,32 @@ class ODESupervisedLearningModel():
                         
                         self.stop_epoch[model_index] = epoch
                         self.info_dict['stop_epoch_list'] = self.stop_epoch.tolist()
-
+                        models.append(nn_model)
                         
                         break
 
                     epoch += 1
 
-    def compute_loss_batch(self, U_subset, time_subset,
-                            nn_model, loss_func, 
-                            batch_index=None, device='cpu'):
+            return models
+
+    def compute_loss_batch(self, U_subset, time_span, mask,
+                            nn_model, loss_func, batch_index=None, 
+                            device='cpu'):
         """
         Get parameters, then generate data according to
         ODE and compare with remaining points
         """
         #TODO: Extend to multiple batches
         
-        U_subset.to(device)
         p_hat = nn_model(U_subset)
-        U_hat = self.gen_ODE(p_hat, time_subset)
+        p_hat = p_hat.squeeze()
 
-        loss = loss_func(U_subset, U_hat)
-
+        mask = torch.tensor(mask, dtype=torch.bool)
+        U_hat = self.gen_ODE(p_hat, time_span, mask)
+        #U_hat.to(torch.float32)
+        
+        U_subset = U_subset.flatten()
+        loss = loss_func(U_hat, U_subset)
         return loss
 
     def predict_dataset(self): 
