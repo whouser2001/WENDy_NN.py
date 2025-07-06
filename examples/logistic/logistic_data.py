@@ -44,7 +44,8 @@ def solve_logistic_torch(p, T, u0):
     """
     def fhat(t,u): return f(p,u,t)
 
-    u = odeint(fhat, T, torch.tensor(u0))
+    #u = odeint(fhat, T, torch.tensor(u0))
+    u = odeint(fhat, torch.tensor(u0, dtype=torch.float64), T)
     return u.flatten()
 
 
@@ -59,7 +60,8 @@ def genU_logistic(p, T, mask):
     """
     u = solve_logistic_torch(p,T,[0.01])
 
-    mask = torch.tensor(mask, dtype=bool)
+    mask = torch.tensor(mask, dtype=torch.bool,
+                        device=u.device)
     u = u[mask]
     
     return u

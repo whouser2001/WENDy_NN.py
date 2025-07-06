@@ -28,7 +28,8 @@ if __name__=='__main__':
 
     models = logistic_testCNN.train_ensemble(
         nensemble = 2,
-        nepochs = 5
+        nepochs = 20,
+        learn_rate=5e-3
     )
 
     print(models[1])
