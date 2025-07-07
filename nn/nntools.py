@@ -26,13 +26,23 @@ class ODESupervisedLearningModel():
         nn_module : torch.nn.Module
             Pytorch NN module to be used for trainging (from nnmodels)
 
-        dataset : Sampled data U
+        dataset : current np array (TODO: change to torch tensor)
+            Sampled data U
 
-        T : Defines the time interval (0,T) over which we sampled data
+        T : int
+            Defines the time interval (0,T) over which we sampled data
 
-        gen_ODE : Function of parameters p and time subset Tsubset. 
-            Via ODE solver, generates samples according to the parameters
-            over the given times
+        gen_ODE : Function with parameters
+            p : torch.tensor
+                ODE paramters
+            t : torch.tensor
+                Specifies times on which U is sampled
+                This is itself parametrized by T, U.size
+            mask : np.array (TODO?: change to torch tensor)
+                Mask applied to U (for train/val split)
+
+            Uses an ODE solve (torchdiffeq.odeint) to generate data
+            according to p for comparison with U[mask] in loss function
         """
         self.model_name = model_name
         self.nn_module = nn_module
@@ -58,7 +68,7 @@ class ODESupervisedLearningModel():
                         weight_decay = 0.0,
                         learn_rate = 5e-3,
                         nepochs = 100,
-                        tol = 1e-1): 
+                        tol = 1e-2): 
             
             info_dict = self.info_dict
             model_name = info_dict['model_name']
@@ -84,7 +94,8 @@ class ODESupervisedLearningModel():
             self.stop = stop
             self.tol = tol
 
-            models = []
+            self.models = []
+            models = self.models
 
             # begin training
             for model_index in range(nensemble):
@@ -113,32 +124,23 @@ class ODESupervisedLearningModel():
                                                   replace=False)
                 mask = np.zeros(n_elements, dtype=bool)
                 mask[masked_indices] = True
-                #print(mask.size)
                 maskU = mask.reshape(info_dict['shape'])
 
                 U_train = U.copy().astype(float)[maskU]
+                U_train = np.expand_dims(U_train, axis=0)
+                U_train = torch.tensor(U_train, dtype=torch.float64,
+                                       requires_grad=True)
+
                 U_val = U.copy().astype(float)[
                     np.logical_not(maskU)
                 ]
-
-                U_train = np.expand_dims(U_train, axis=0)
                 U_val = np.expand_dims(U_val, axis=0)
-
-                U_train = torch.tensor(U_train, dtype=torch.float64,
-                                       requires_grad=True)
                 U_val = torch.tensor(U_val, dtype=torch.float64,
                                      requires_grad=True)
 
-                #Corresponding times of train/val subsets
+                #Corresponding times of U
                 t = np.linspace(0,self.T,n_elements)
-                #t_train = t.copy().astype(float)[mask]
-                #t_val = t.copy().astype(float)[
-                #    np.logical_not(mask)
-                #]
-
                 t = torch.tensor(t, dtype=torch.float64)
-                #t_train = torch.tensor(t_train)
-                #t_val = torch.tensor(t_val)
 
                 epoch = 1
                 while epoch < nepochs + 1:
@@ -150,8 +152,6 @@ class ODESupervisedLearningModel():
                     #monitor training loss
                     train_loss = 0.0
 
-                    #TODO: train/test split
-
                     optimizer.zero_grad()
                     loss = compute_loss(
                         U_train, t, mask, nn_model, 
@@ -159,22 +159,11 @@ class ODESupervisedLearningModel():
 
                     #backpropogation
                     loss.backward()
-                    """
-                    total_norm = 0.0
-                    for p in nn_model.parameters():
-                        if p.grad is not None:
-                            param_norm = p.grad.detach().data.norm(2)
-                            total_norm += param_norm.item() ** 2
-                    total_norm = total_norm ** 0.5
-                    print(f"Gradient norm: {total_norm:.4e}")
-                    """
 
                     optimizer.step()
 
                     train_loss = loss.item()
                     train_loss_array[epoch-1] = train_loss
-
-                    #TODO: save_loss?
 
                     #switch model to validation mode
                     nn_model.eval()
@@ -189,10 +178,12 @@ class ODESupervisedLearningModel():
                     valid_loss_array[epoch-1] = valid_loss
 
                     #display status
-                    msg = "\nmodel {:2d}/{:2d}, e= {:3d}, tl= {:1.2e}, vl= {:1.2e}"\
-                    .format(model_index, nensemble-1,
-                            epoch, train_loss, valid_loss)
-                    print(msg)
+                    gap = 5
+                    if not epoch % gap:
+                        msg = "\nmodel {:2d}/{:2d}, e= {:3d}, tl= {:1.2e}, vl= {:1.2e}"\
+                        .format(model_index, nensemble-1,
+                                epoch, train_loss, valid_loss)
+                        print(msg)
 
                     #apply stopping criteria
                     #TODO: implement _save_nn_model?
@@ -206,7 +197,7 @@ class ODESupervisedLearningModel():
 
                     epoch += 1
 
-            return models
+            return self.models
 
     def compute_loss_batch(self, U_subset, time_span, mask,
                             nn_model, loss_func, batch_index=None, 
@@ -230,8 +221,20 @@ class ODESupervisedLearningModel():
 
     def predict_dataset(self): 
         """
-        Predict the entire dataset U
+        Predict the parameters based on entire dataset U
+        and all models in the ensemble
         """
+        #U = self.dataset
+        #U = U.flatten()
+        #U = np.expand_dims(U, axis=0)
+        U = torch.tensor(self.dataset.T)
 
-        raise NotImplementedError
+        p_hat = torch.zeros(2)
+        models = self.models
+
+        for model in models:
+            p_hat += model(U) #TODO: fix dims
+        p_hat /= len(models)
+
+        return p_hat
 
