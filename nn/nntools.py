@@ -216,7 +216,8 @@ class ODESupervisedLearningModel():
         #U_hat.to(torch.float32)
         
         U_subset = U_subset.flatten()
-        loss = loss_func(U_hat, U_subset)
+        loss = loss_func(U_hat, U_subset) 
+
         return loss
 
     def predict_dataset(self): 
@@ -224,17 +225,101 @@ class ODESupervisedLearningModel():
         Predict the parameters based on entire dataset U
         and all models in the ensemble
         """
-        #U = self.dataset
-        #U = U.flatten()
-        #U = np.expand_dims(U, axis=0)
+        
         U = torch.tensor(self.dataset.T)
 
         p_hat = torch.zeros(2)
         models = self.models
 
-        for model in models:
-            p_hat += model(U) #TODO: fix dims
+        for model in models: p_hat += model(U)
         p_hat /= len(models)
 
         return p_hat
 
+class WENDyTestFunctionSupervisedLearningModel():
+    
+    def __init__(self,
+                 model_name='',
+                 nn_module=None,
+                 dataset=None,
+                 WENDy_variant='OLS',
+                 batch_size=1,
+                 train_device='cpu',
+                 test_device='cpu'):
+        """
+        Class that provides utilites for test function learning
+        in the WENDy problem
+
+        Parameters
+        ----------
+        model_name : str
+
+        nn_module : torch.nn.Module
+            Pytorch NN module to be used in training
+
+        dataset : torch.tensor
+            Tensor of sampled data U
+
+        WENDy_variant : str
+            specifies which WENDy variant to run for computing loss
+        """
+        self.model_name = model_name
+        self.nn_module = nn_module
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.WENDy_variant = WENDy_variant
+
+        self.info_dict = {}
+        self.info_dict['model_name'] = self.model_name
+        self.info_dict['batch_size'] = batch_size
+        self.info_dict['train_device'] = train_device
+        self.info_dict['test_device'] = test_device
+        self.info_dict['shape'] = dataset.shape
+        self.info_dict['size'] = dataset.size
+        
+    def train_ensemble(self,
+                       nensemble = 1,
+                       torch_loss = nn.MSELoss,
+                       torch_optimizer = optim.Adam,
+                       stop = 'nepochs',
+                       weight_decay = 0.0,
+                       learn_rate = 5e-3,
+                       nepochs = 100,
+                       tol = 1e-3):
+        
+        info_dict = self.info_dict
+        model_name = info_dict['model_name']
+        device = info_dict['train_device']
+        U = self.dataset
+
+        info_dict['nensemble'] = nensemble
+        info_dict['nepochs'] = nepochs
+        info_dict['torch_optimizer'] = torch_optimizer.__name__
+        info_dict['torch_loss'] = torch_loss.__name__
+        info_dict['learn_rate'] = learn_rate
+        info_dict['weight_decy'] = weight_decay
+        info_dict['tolerance'] = tol
+
+        compute_loss = self.compute_loss_batch
+
+        #TODO: save_model_info?
+
+        self.stop_epoch = np.zeros(nensemble, dtype=int) - 1
+        self.stop = stop
+        self.tol = tol
+
+        self.models = []
+        models = self.models
+
+        #training below
+
+    def compute_loss_batch(): 
+        #Get dPhi*U, Phi*F
+        # Or dPhi, Phi
+
+        #Plug into WENDy thing
+        raise NotImplementedError
+
+    def predict_dataset(): raise NotImplementedError
+
+    

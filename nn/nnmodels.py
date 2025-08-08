@@ -35,35 +35,50 @@ class testCNN(nn.Module):
 
         return x
 
-class logisticGrowthCNN(nn.Module):
+class WENDyTestFunctionSimpleCNN(nn.Module):
     """
-    LeNet for learning logistic growth parameters
-    
-    Input signal size is (M + 1) x 1 for M = 2**8, 2**9, 2**10
-    So 8-10 conv layers? Extra conv layers for higher M?
-
-    Output has size (2 x 1).
+    Apply an unbiased convolution layer no bias to WENDy input data
     """
-    def init(self,
-             p,
-             set_dropout = False):
-        
+    def __init__(self):
         super().__init__()
 
-        if set_dropout: self.dropout = nn.Dropout(p=0.2)
-        self.set_dropout = set_dropout
+        #Parameters determining kernel size
+        M = 1024 #num data points
+        r = 1/3 #test function radius
+        T = 10 #gives time range [0,T]
 
-        conv1d = nn.Conv1d
-        linear = nn.Linear 
-        self.pool2 = nn.MaxPool1d(2,2)
-        self.relu = nn.ReLU #max(0,x)
+        K = 1 + 2*np.floor(r*self.M/T)
 
-        D = 1
-        nchannels = [D,5,5,10,10,25,25,100,100]
+        self.M = M
+        self.convLayerF = nn.Conv2d(
+            in_channels=1,
+            out_channels=1,
+            kernel_size=(K,1),
+            bias=False
+        )
+        self.convLayerU = nn.Conv2d(
+            in_channels=1,
+            out_channels=1,
+            kernel_size=(K,1),
+            bias=False
+        )
+        self.relu = nn.ReLU()
 
-        #TODO
-    
-    def forward(self, x): raise NotImplementedError
+    def forward(self, x):
+        
+        M = self.M
+        F,U = torch.split(X, M+1, 0)
+        Q = torch.eye(M+1)
+
+        F = torch.matmul(Q,F)
+        U = torch.matmul(Q,U)
+
+        WF = self.convLayerF(F)
+        WU = self.convLayerU(U)
+
+        Y = torch.cat(WF,WU)
+
+        return Y
 
 #test
 if __name__=='__main__':
