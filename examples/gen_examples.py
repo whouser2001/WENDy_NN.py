@@ -1,5 +1,5 @@
 """
-ODE Example problems
+ODE Example problems used in the WENDy-MLE paper
 """
 import torch
 import ODE_data
